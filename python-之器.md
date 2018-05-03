@@ -1,7 +1,8 @@
 ---
 title: python 之器
 date: 2018-04-10 08:29:05
-tags:
+tags: python
+copyright: true
 ---
 # 装饰器
 ## 概念：
