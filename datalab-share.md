@@ -108,7 +108,10 @@ int bitCount(int x) {
 ```
 
 * 所以可以认为``0x55...``将x划分为两个数字一个周期，有了周期的认识我们可以进一步理解我们是如何计数的，用``x = 011``为例,可以看出我们用第一位与第二位相加即可得到1的数量，那么如何相加呢？给出如下解决方案``cnt = (x >> 1) + (x & 1)``.以此为基础我们看上述代码，``0x55555555``作为一个掩码，覆盖掉每个周期的第一个数字，在每一个周期中达到``（x & 1）``的目的，``((x >> 1) & 0x55555555)``达到``(x >> 1)``的目的，二者相加得到每一个周期中1的数量。
-* 计算到现在，我们的每一个周期所代表的值相加可得最终的值，因此我们现在需要做的是将周期进一步扩大，直到32个数字为一个周期，那么后16位的值便是最终结果。而且我们已经利用掩码将前16为屏蔽，故结果容易得出。
+* 计算到现在，我们的每一个周期所代表的值相加可得最终的值，因此我们现在需要做的是将周期进一步扩大，直到32个数字为一个周期，那么后16位的值便是最终结果。而且我们已经利用掩码将前16为屏蔽，故结果容易得出。   
+
+### PS：
+这种做法在macOS上无法通过，可以在Ubuntu上跑。
 
 ## bang
 ### 要求：
@@ -284,3 +287,115 @@ int isLessOrEqual(int x, int y) {
 * 该题的本质就是求x的二进制表示中唯一的 1 在第几位。可以利用二分法的思想。
 * 首先将x右移16位，然后判断所得结果是否为正数，若为正数，则 1 位于高十六位，将结果加16，否则位于低十六位，加0。应注意的是加法的实现方式。
 * 然后重复上述该操作，注意的是此后的移动位数有所变化，与上次结果有关。最终可以确定 1 的位置。
+
+## float_neg
+### 要求：
+```
+float_neg - Return bit-level equivalent of expression -f for
+ *   floating point argument f.
+ *   Both the argument and result are passed as unsigned int's, but
+ *   they are to be interpreted as the bit-level representations of
+ *   single-precision floating point values.
+ *   When argument is NaN, return argument.
+ *   Legal ops: Any integer/unsigned operations incl. ||, &&. also if, while
+ *   Max ops: 10
+ *   Rating: 2
+ ```
+ ### 函数：
+ ```C
+ unsigned float_neg(unsigned uf){
+  unsigned temp = uf & 0x7fffffff;
+  unsigned resulte = uf ^ 0x80000000;
+  if(temp > 0x7f800000){
+    resulte = uf;
+  }
+  return resulte;
+}
+```
+### 解析：
+* 题目给出了一个32位的无符号数，要求我们把它看作一个单精度的浮点数的位级表示，并求出它的相反数。当该数字是NaN的时候将该数字返回。
+* 利用异或将该数字的符号位取反，然后设置一个变量来判断uf是否为NaN，如果位NaN，将结果重新设置为uf。
+
+## float_i2f
+### 要求：
+```
+float_i2f - Return bit-level equivalent of expression (float) x
+Result is returned as unsigned int, but
+it is to be interpreted as the bit-level representation of a
+single-precision floating point values.
+Legal ops: Any integer/unsigned operations incl. ||, &&. also if, while
+Max ops: 30
+Rating: 4
+```
+### 函数：
+```C
+unsigned float_i2f(int x){
+  unsigned sign = x >> 31 & 0x1;
+  unsigned exp, fra, framask = 0x7fffff;
+  int i, rounding;
+  if(x == 0){
+    return 0;
+  }else if(x == 0x80000000){
+    return 0xcf000000;
+  }else{
+    if(sign){
+      x = -x;
+    }
+    i = 30;
+    while(!(x >> i)){
+      i--;
+    }
+    exp = i + 127;
+    x = x << (31 - i);
+    fra = (x >> 8) & framask;
+
+    x = x & 0xff;
+    rounding = x > 128 || ((x == 128) && fra & 1);
+    fra += rounding;
+
+    if(fra >> 23){
+      fra &= framask;
+      exp++;
+    }
+  }
+  return (sign << 31) | (exp << 23) | fra;
+}
+```
+### 解析
+* 1-3行用来初始变量，``sign``表示符号位，``exp``表示阶码，``fra``表示尾码，``framask``表示尾码的掩码。
+* 5-6行判断参数是否为零，是则直接返回。
+* 7-8行判断是否为TMin，是则直接返回``0xcf00000``
+* 10-12行判断是否为负数，若是负数，则求绝对值，因为整形负数的补码不好直接转换。
+* 13-17求得第一个非零位，以及这是第几位，并加上相应的偏置，求的对应的阶码。
+* 18行将x有效数据前的0清除，使其以有效数字开头。
+* 19行确定初步的尾数部分（此时还没有舍入）。
+* 21-27根据舍入规则，确定之前舍弃的八位是否应该进位，并进行相应操作。
+* 最后根据浮点数的组成形式返回结果。
+
+## float_twice
+### 要求：
+```
+float_twice - Return bit-level equivalent of expression 2*f for
+floating point argument f.
+Both the argument and result are passed as unsigned int's, but
+they are to be interpreted as the bit-level representation of
+single-precision floating point values.
+When argument is NaN, return argument
+Legal ops: Any integer/unsigned operations incl. ||, &&. also if, while
+Max ops: 30
+Rating: 4
+ ```
+### 函数：
+```C
+unsigned float_twice(unsigned uf) {
+  unsigned result = uf;
+  if((result & 0x7f800000) == 0){
+    result = ((result & 0x007fffff) << 1) | (result & 0x80000000);
+  }else if((result & 0x7f800000) != 0x7f800000){
+    result += 0x00800000;
+  }
+  return result;
+}
+```
+### 解析：
+* 求浮点数乘2的值，根据浮点数的三种情况分类讨论下即可。
